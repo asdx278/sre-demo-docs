@@ -11,59 +11,69 @@ Impact: пользователи получают медленные ответ�
 - Пришло уведомление из Grafana OnCall (эскалация SRE Primary → SRE Secondary → Lead SRE)
 - Возможен рост ответов 4xx/5xx
 
+## Первое действие
+
+Подтвердите алерт в Grafana OnCall (**Acknowledge**) — это остановит дальнейшую эскалацию и покажет команде, что инцидент взят в работу.
+
 ## Быстрые проверки (первые 5 минут)
 
-1. Состояние подов — все 4 реплики должны быть `Running` и `Ready`, без рестартов:
+### 1. Состояние подов
+
+Все 4 реплики должны быть `Running` и `Ready`, без рестартов:
 
 ```bash
-    kubectl -n podinfo get pods -o wide
+kubectl -n podinfo get pods -o wide
 ```
 
-2. Последние события и изменения — был ли недавно релиз:
+### 2. Последние события и изменения
+
+Был ли недавно релиз:
 
 ```bash
-    kubectl -n podinfo get events --sort-by=.lastTimestamp | tail -20
-    kubectl -n podinfo rollout history deployment/podinfo
+kubectl -n podinfo get events --sort-by=.lastTimestamp | tail -20
+kubectl -n podinfo rollout history deployment/podinfo
 ```
 
-3. Логи приложения:
+### 3. Логи приложения
 
 ```bash
-    kubectl -n podinfo logs deployment/podinfo --tail=100
+kubectl -n podinfo logs deployment/podinfo --tail=100
 ```
 
-4. Нет ли постороннего пода, генерирующего нагрузку:
+### 4. Посторонние поды в namespace
+
+Поды приложения помечены `app.kubernetes.io/name=podinfo`; команда покажет всё остальное, например генератор нагрузки:
 
 ```bash
-    kubectl -n podinfo get pods | grep -v '^podinfo-'
+kubectl -n podinfo get pods -l 'app.kubernetes.io/name!=podinfo'
 ```
 
-5. Дашборд / Grafana Explore — деградирует один под или все:
+### 5. Grafana Explore — деградирует один под или все
 
 ```
-    histogram_quantile(0.95, sum by (pod, le) (rate(http_request_duration_seconds_bucket{namespace="podinfo"}[2m])))
+histogram_quantile(0.95, sum by (pod, le) (rate(http_request_duration_seconds_bucket{namespace="podinfo"}[2m])))
 ```
 
 ## Восстановление (один безопасный шаг по ситуации)
 
-- **Источник — посторонний под с нагрузкой** (например, `podinfo-latency-chaos`): удалить его
+**Источник — посторонний под с нагрузкой** (например, `podinfo-latency-chaos`): удалить его.
 
 ```bash
-    kubectl -n podinfo delete pod podinfo-latency-chaos
+kubectl -n podinfo delete pod podinfo-latency-chaos
 ```
 
-- **Недавно был релиз:** откатить последнее изменение
+**Недавно был релиз:** откатить последнее изменение.
 
 ```bash
-    kubectl -n podinfo rollout undo deployment/podinfo
-    kubectl -n podinfo rollout status deployment/podinfo
+kubectl -n podinfo rollout undo deployment/podinfo
+kubectl -n podinfo rollout status deployment/podinfo
 ```
 
-- **Релизов не было, деградируют поды:** перезапуск без простоя (rolling restart)
+**Релизов не было, деградируют поды:** перезапуск без простоя (rolling restart).
 
 ```bash
-    kubectl -n podinfo rollout restart deployment/podinfo
-    kubectl -n podinfo rollout status deployment/podinfo
+kubectl -n podinfo rollout restart deployment/podinfo
+kubectl -n podinfo rollout status deployment/podinfo
 ```
 
 ## Проверка после восстановления
@@ -74,4 +84,4 @@ Impact: пользователи получают медленные ответ�
 
 ## Эскалация
 
-Не удалось восстановить за 15 минут — эскалировать Lead SRE через OnCall (Escalate) и сообщить в канал инцидента.
+Не удалось восстановить за 15 минут — подключить к инциденту Lead SRE и разработчика сервиса (в алерт-группе OnCall: **Participants → Add**) и сообщить в канал инцидента.
