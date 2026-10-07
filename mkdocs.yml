@@ -5,3 +5,4 @@ nav:
       - Рост 5xx: runbooks/http_5xx_rate_high.md
       - Здоровье сервиса: runbooks/service_healthcheck_failed.md
       - Демонстрация PodInfo: runbooks/podinfo_http_errors.md
+      - "PodInfo: ошибки и рост latency": runbooks/podinfo_latency.md
